@@ -1,0 +1,10 @@
+Dependencies
+------------
+
+libibverbs-dev
+
+
+HW Requirements
+---------------
+
+RDMA NIC, OFED drivers
