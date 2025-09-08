@@ -25,7 +25,7 @@ struct rdma_xchg_args {
 };
 
 // Validate peer exists in the network config
-int __smr__valid_peer(struct config *c, uint64_t ip, int id) {
+int __smr__valid_peer(struct config *c, uint32_t ip, int id) {
     for (size_t i = 0; i < c->n; ++i)
         if (ip == c->p[i].ip.s_addr && c->p[i].id == id) return 1;
     return 0;
@@ -109,6 +109,7 @@ void *__smr__server_thread(void *ptr) {
 
     struct config *c = r->c;
     uint16_t host_port = c->p[c->host_id].tcp_port;
+    uint32_t host_ip = c->p[c->host_id].ip.s_addr;
 
     if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket:");
@@ -119,7 +120,7 @@ void *__smr__server_thread(void *ptr) {
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = htonl(INADDR_ANY);
+    server.sin_addr.s_addr = host_ip;
     server.sin_port = htons(host_port);
 
     if (bind(serverfd, (struct sockaddr *)&server, sizeof(server)) < 0) {
@@ -132,7 +133,8 @@ void *__smr__server_thread(void *ptr) {
         goto err;
     }
 
-    SMR_LOG("[tcp/server] Server listening on port %d\n", host_port);
+    SMR_LOG("[tcp/server] Server listening on %s:%d\n",
+            inet_ntoa(server.sin_addr), host_port);
 
     // Accept connections from higher-ranked peers
     size_t expected_clients = c->n - c->host_id - 1;
@@ -144,17 +146,13 @@ void *__smr__server_thread(void *ptr) {
             SMR_LOG("Established connection with %s\n",
                     inet_ntoa(client.sin_addr));
 
-            // Read and validate incoming peer ID.
+            // Read incoming peer ID.
             uint16_t id = 0;
             if ((nbytes = read(clientfd, &id, sizeof id)) != sizeof id) {
                 perror("read");
                 continue;
             }
             id = ntohs(id);
-            if (!__smr__valid_peer(c, client.sin_addr.s_addr, id)) {
-                SMR_LOG_ERR("Invalid peer");
-                continue;
-            }
 
             // Exchange attributes for rep/bg planes
             for (int plane = 0; plane < SMR_NPLANES - 1; ++plane) {
@@ -328,6 +326,5 @@ int rdma_handshake(struct rdma *r) {
 
     /* Server loop blocks here */
     if (server) pthread_join(st, NULL);
-
     return sa.ret;
 }

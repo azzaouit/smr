@@ -64,6 +64,7 @@ int main() {
         c[i].n = NPEERS;
         c[i].host_id = i;
         c[i].p = p;
+        c[i].rdma_device = 0;
     }
 
     for (int i = 0; i < NPEERS; ++i)

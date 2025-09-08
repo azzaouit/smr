@@ -13,16 +13,6 @@ TESTS=$(patsubst %.c, %, $(wildcard tests/*.c))
 
 all: build tests
 
-# Run as root to setup roce
-roce:
-	modprobe rdma_rxe
-	rdma link add rxe0 type rxe netdev $(iface)
-
-# Clean up roce
-roce-clean:
-	rdma link delete rxe0
-	modprobe -r rdma_rxe
-
 build: $(OBJ)
 	$(CC) -o $(LIB) $(OBJ) $(LDFLAGS)
 
@@ -35,15 +25,34 @@ src/%.o: src/%.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 install: all
-	sudo cp $(LIB) $(PREFIX)/lib
-	sudo cp -r include $(PREFIX)/include/smr
+	cp $(LIB) $(PREFIX)/lib
+	cp -r include $(PREFIX)/include/smr
 
 uninstall:
-	sudo rm -f $(PREFIX)/lib/$(LIB)
-	sudo rm -rf $(PREFIX)/include/smr
+	rm -f $(PREFIX)/lib/$(LIB)
+	rm -rf $(PREFIX)/include/smr
 
 clean:
 	rm -rf $(OBJ) $(TESTS) $(LIB)
 
 format:
 	find . -type f -name "*.c" -o -name "*.h" -exec clang-format -i {} \;
+
+roce:	
+	modprobe rdma_rxe
+	ip link add veth0 type veth peer name veth1
+	ip addr add 192.168.2.2/24 dev veth0
+	ip addr add 192.168.2.3/24 dev veth1
+	ip link set veth0 up
+	ip link set veth1 up
+	rdma link add rxe0 type rxe netdev veth0
+	rdma link add rxe1 type rxe netdev veth1
+
+roce-clean:
+	ip link delete veth0
+	ip link delete veth2
+	ip link delete veth0
+	ip link delete veth2
+	rdma link delete rxe0
+	rdma link delete rxe1
+	modprobe -r rdma_rxe

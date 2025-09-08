@@ -33,7 +33,7 @@ uint64_t __smr__hb_tick(struct consensus *n) {
             return ret;
         }
 
-    return consensus_wait(n, SMR_BG, npeers - 1);
+    return 0;  // consensus_wait(n, SMR_BG, npeers - 1);
 }
 
 /* Leader election background thread.
@@ -55,9 +55,15 @@ void *__smr__leader_election_thread(void *p) {
         if ((ret = __smr__hb_tick(n))) goto err;
         for (int i = 0; i < npeers; ++i)
             if (i != host_id) {
-                SMR_LOG("Heartbeat %hu: %lu\n", i, hb_remote[i]);
                 l->scores[i] +=
                     (l->hb[i] != hb_remote[i]) - (l->hb[i] == hb_remote[i]);
+                /* Scores are capped by a maximum and minimum */
+                if (l->scores[i] < SMR_HB_SCORE_MIN)
+                    l->scores[i] = SMR_HB_SCORE_MIN;
+                if (l->scores[i] > SMR_HB_SCORE_MAX)
+                    l->scores[i] = SMR_HB_SCORE_MAX;
+                SMR_LOG("Heartbeat %hu: %lu %ld\n", i, hb_remote[i],
+                        l->scores[i]);
             }
         sleep(HB_TICK_FREQ);
     }

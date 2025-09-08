@@ -44,7 +44,7 @@ int consensus_init(struct config *c, struct consensus *n, size_t log_size) {
                 SMR_MAX_BUF;
     SMR_ALLOC(n->buf, ss);
 
-    size_t les = sizeof(uint64_t) * npeers;
+    size_t les = sizeof(int64_t) * npeers;
     SMR_ALLOC(n->le.hb, les);
     SMR_ALLOC(n->le.scores, les);
 

@@ -13,8 +13,15 @@
 /* Full log size */
 #define SMR_LOG_SIZE (SMR_MAX_BUF * SMR_MAX_SLOTS)
 
-/* Leader switch happens after score drops below 2 */
+/* Failure threshold. Leader switch happens if the leader's score drops below
+ * this value. */
 #define SMR_HB_FAIL_THRESH (2)
+
+/* Minimum score value */
+#define SMR_HB_SCORE_MIN (0)
+
+/* Maximum score value */
+#define SMR_HB_SCORE_MAX (15)
 
 // Debugging macros
 #define SMR_LOG_ERR(MSG) fprintf(stderr, "%s:%d %s\n", __FILE__, __LINE__, MSG)
@@ -44,6 +51,7 @@ struct peer_config {
 struct config {
   size_t n;              // number of peers
   uint16_t host_id;      // this peer's rank
+  uint8_t rdma_device;   // index into rdma device list
   struct peer_config *p; // all peers
 };
 

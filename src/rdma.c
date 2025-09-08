@@ -28,8 +28,8 @@ int rdma_init(struct config *c, struct rdma *r) {
         goto exit;
     }
 
-    // default to first device
-    if (!(r->ctx = ibv_open_device(dev_list[0]))) {
+    // open rdma device
+    if (!(r->ctx = ibv_open_device(dev_list[c->rdma_device]))) {
         SMR_LOG_ERR("ibv_open_device failed");
         ibv_free_device_list(dev_list);
         goto exit;

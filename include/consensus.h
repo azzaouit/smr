@@ -28,10 +28,10 @@ struct log {
 
 /* Leader election handle */
 struct leader_election {
-  uint16_t leader;  // current leader
-  uint64_t *hb;     // all heartbeats
-  uint64_t *scores; // all scores
-  pthread_t tid;    // leader election thread handle
+  uint16_t leader; // current leader
+  uint64_t *hb;    // all heartbeats
+  int64_t *scores; // all scores
+  pthread_t tid;   // leader election thread handle
 };
 
 /* Main consensus handle */

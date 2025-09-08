@@ -1,44 +1,26 @@
-// test multiple remote hosts
+// test multiple peers on the same host
 #include <arpa/inet.h>
 #include <assert.h>
 #include <consensus.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #define NPEERS (2)
 #define PORT (8000)
 #define IB_PORT (1)
-#define GID_INDEX (1)
+#define GID_INDEX (0)
 
 union ipv4 {
     char ip[4];
     uint32_t v;
 };
 
-int main(int argc, char *argv[]) {
+void *client_thread(void *p) {
     struct consensus n;
     uint8_t *buf = NULL;
-    struct peer_config p[NPEERS];
-    union ipv4 host = {.ip = {0, 1, 10, 10}};
-
-    if (argc != 2) {
-        fprintf(stderr, "Usage %s <host id>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    for (int i = 0; i < NPEERS; ++i) {
-        host.ip[0] = i + 1;
-        p[i].ip.s_addr = (uint32_t)htonl(host.v);
-        p[i].id = i;
-        p[i].tcp_port = PORT;
-        p[i].ib_port = IB_PORT;
-        p[i].gid_index = GID_INDEX;
-    }
-
-    struct config c = {
-        .n = NPEERS, .host_id = atoi(argv[1]), .p = p, .rdma_device = 0};
-
-    assert(!consensus_init(&c, &n, SMR_LOG_SIZE));
+    struct config *c = (struct config *)p;
+    assert(!consensus_init(c, &n, SMR_LOG_SIZE));
     assert(!consensus_connect(&n));
     srand(42);
 
@@ -51,7 +33,7 @@ int main(int argc, char *argv[]) {
         }
         free(buf);
     } else
-        sleep(10);
+        sleep(5);
 
     struct log_header *h = &n.log->h;
     assert(h->size == SMR_LOG_SIZE);
@@ -64,5 +46,33 @@ int main(int argc, char *argv[]) {
     }
 
     consensus_destroy(&n);
+    pthread_exit(NULL);
+}
+
+int main() {
+    pthread_t tids[NPEERS];
+    struct config c[NPEERS];
+    struct peer_config p[NPEERS];
+    // union ipv4 host = {.ip = {1, 0, 0, 127}};
+    union ipv4 host = {.ip = {0, 2, 168, 192}};
+
+    for (int i = 0; i < NPEERS; ++i) {
+        host.ip[0] = i + 2;
+        p[i].ip.s_addr = (uint32_t)htonl(host.v);
+        p[i].id = i;
+        p[i].tcp_port = PORT;
+        p[i].ib_port = IB_PORT;
+        p[i].gid_index = GID_INDEX;
+        c[i].n = NPEERS;
+        c[i].host_id = i;
+        c[i].p = p;
+        c[i].rdma_device = i;
+    }
+
+    for (int i = 0; i < NPEERS; ++i)
+        assert(!pthread_create(tids + i, NULL, client_thread, (void *)(c + i)));
+
+    for (int i = 0; i < NPEERS; ++i) pthread_join(tids[i], NULL);
+
     return 0;
 }
