@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "timer.h"
+
 #define NPEERS (2)
 #define PORT (8000)
 #define IB_PORT (1)
@@ -25,6 +27,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage %s <host id>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
+
+    SMR_LOG_SET_VERBOSITY(SMR_LOG_ERROR);
 
     for (int i = 0; i < NPEERS; ++i) {
         host.ip[0] = i + 1;
@@ -47,7 +51,7 @@ int main(int argc, char *argv[]) {
         assert(buf);
         for (int i = 0; i < SMR_MAX_SLOTS; ++i) {
             for (int j = 0; j < SMR_MAX_BUF; ++j) buf[j] = i;
-            assert(!consensus_propose(&n, buf, SMR_MAX_BUF));
+            TIME_BLOCK_US(assert(!consensus_propose(&n, buf, SMR_MAX_BUF)););
         }
         free(buf);
     } else

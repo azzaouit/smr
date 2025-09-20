@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "timer.h"
+
 #define NPEERS (16)
 #define PORT (8000)
 #define IB_PORT (1)
@@ -29,7 +31,7 @@ void *client_thread(void *p) {
         assert(buf);
         for (int i = 0; i < SMR_MAX_SLOTS; ++i) {
             for (int j = 0; j < SMR_MAX_BUF; ++j) buf[j] = i;
-            assert(!consensus_propose(&n, buf, SMR_MAX_BUF));
+            TIME_BLOCK_US(assert(!consensus_propose(&n, buf, SMR_MAX_BUF)););
         }
         free(buf);
     } else
@@ -54,6 +56,8 @@ int main() {
     struct config c[NPEERS];
     struct peer_config p[NPEERS];
     union ipv4 host = {.ip = {1, 0, 0, 127}};
+
+    SMR_LOG_SET_VERBOSITY(SMR_LOG_ERROR);
 
     for (int i = 0; i < NPEERS; ++i) {
         p[i].ip.s_addr = (uint32_t)htonl(host.v);

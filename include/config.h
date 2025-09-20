@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 
+#include "log.h"
+
 /* Max buffer size for each slot */
 #define SMR_MAX_BUF (1 << 5)
 
@@ -22,10 +24,6 @@
 
 /* Maximum score value */
 #define SMR_HB_SCORE_MAX (15)
-
-// Debugging macros
-#define SMR_LOG_ERR(MSG) fprintf(stderr, "%s:%d %s\n", __FILE__, __LINE__, MSG)
-#define SMR_LOG(...) fprintf(stdout, "[smr] " __VA_ARGS__)
 
 /* Replication planes */
 #define SMR_NPLANES (3)
