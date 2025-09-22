@@ -5,13 +5,13 @@
 #include <time.h>
 
 typedef enum {
-  SMR_LOG_ERROR,
+  SMR_LOG_ERROR = 0,
   SMR_LOG_WARN,
   SMR_LOG_INFO,
   SMR_LOG_DEBUG
 } smr_log_level_t;
 
-static int smr_log_verbosity = 0; // 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG
+static int smr_log_verbosity = SMR_LOG_ERROR;
 
 #define SMR_LOG_SET_VERBOSITY(level) (smr_log_verbosity = (level))
 

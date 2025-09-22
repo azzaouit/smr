@@ -36,9 +36,9 @@ clean:
 	rm -rf $(OBJ) $(TESTS) $(LIB)
 
 format:
-	find . -type f -name "*.c" -o -name "*.h" -exec clang-format -i {} \;
+	find . -type f -name "*.c" -o -name "*.h" -exec clang-format -style=llvm -i {} \;
 
-roce:	
+roce:
 	modprobe rdma_rxe
 	ip link add veth0 type veth peer name veth1
 	ip addr add 192.168.2.2/24 dev veth0

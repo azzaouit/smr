@@ -69,29 +69,6 @@ static inline uint64_t rdtsc() {
            (unsigned long long)elapsed_cycles);                                \
   } while (0)
 
-/* Ultra-precise statistical timing */
-#define TIME_BLOCK_NS_STATS(label, iterations, block)                          \
-  do {                                                                         \
-    uint64_t total_ns = 0, min_ns = UINT64_MAX, max_ns = 0;                    \
-    for (int _i = 0; _i < iterations; _i++) {                                  \
-      uint64_t start_ns = get_nanoseconds();                                   \
-      block uint64_t end_ns = get_nanoseconds();                               \
-      uint64_t elapsed_ns = end_ns - start_ns;                                 \
-      total_ns += elapsed_ns;                                                  \
-      if (elapsed_ns < min_ns)                                                 \
-        min_ns = elapsed_ns;                                                   \
-      if (elapsed_ns > max_ns)                                                 \
-        max_ns = elapsed_ns;                                                   \
-    }                                                                          \
-    double avg_ns = (double)total_ns / iterations;                             \
-    printf("%s stats (%d runs):\n", label, iterations);                        \
-    printf("  avg: %.1f ns (%.3f μs)\n", avg_ns, avg_ns / 1000.0);             \
-    printf("  min: %llu ns (%.3f μs)\n", (unsigned long long)min_ns,           \
-           min_ns / 1000.0);                                                   \
-    printf("  max: %llu ns (%.3f μs)\n", (unsigned long long)max_ns,           \
-           max_ns / 1000.0);                                                   \
-  } while (0)
-
 /* Microsecond precision (alternative for systems without nanosecond support) */
 #define TIME_BLOCK_US(block)                                                   \
   do {                                                                         \
@@ -102,22 +79,6 @@ static inline uint64_t rdtsc() {
                           (end.tv_usec - start.tv_usec);                       \
     printf("Block executed in %llu microseconds (%.3f ms)\n",                  \
            (unsigned long long)elapsed_us, elapsed_us / 1000.0);               \
-  } while (0)
-
-/* Benchmark macro for very fast operations */
-#define BENCHMARK_NS(label, repeats, block)                                    \
-  do {                                                                         \
-    printf("Benchmarking %s (%d iterations)...\n", label, repeats);            \
-    uint64_t start_ns = get_nanoseconds();                                     \
-    for (int _i = 0; _i < repeats; _i++) {                                     \
-      block                                                                    \
-    }                                                                          \
-    uint64_t end_ns = get_nanoseconds();                                       \
-    uint64_t total_ns = end_ns - start_ns;                                     \
-    double avg_ns = (double)total_ns / repeats;                                \
-    printf("  Total: %llu ns (%.3f ms)\n", (unsigned long long)total_ns,       \
-           total_ns / 1000000.0);                                              \
-    printf("  Per iteration: %.1f ns (%.3f μs)\n", avg_ns, avg_ns / 1000.0);   \
   } while (0)
 
 #endif /* TIMER_H */

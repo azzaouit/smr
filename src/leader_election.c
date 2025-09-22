@@ -15,25 +15,25 @@
  * Responsible for incrementing remote heartbeat
  * for every peer node. */
 uint64_t __smr__hb_tick(struct consensus *n) {
-    uint64_t ret;
-    uint16_t npeers = n->c->n;
-    uint16_t host_id = n->c->host_id;
-    off_t offset = sizeof(uint64_t) * host_id;
+  uint64_t ret;
+  uint16_t npeers = n->c->n;
+  uint16_t host_id = n->c->host_id;
+  off_t offset = sizeof(uint64_t) * host_id;
 
-    struct mem_tx tx = {.local_plane = SMR_BG,
-                        .local_addr = (uint64_t)n->bg + offset,
-                        .remote_plane = SMR_BG,
-                        .remote_addr = 0,
-                        .remote_offset = offset,
-                        .len = sizeof(uint64_t)};
+  struct mem_tx tx = {.local_plane = SMR_BG,
+                      .local_addr = (uint64_t)n->bg + offset,
+                      .remote_plane = SMR_BG,
+                      .remote_addr = 0,
+                      .remote_offset = offset,
+                      .len = sizeof(uint64_t)};
 
-    for (int i = 0; i < npeers; ++i)
-        if (i != host_id && (ret = rdma_inc(&n->r, &tx, i))) {
-            SMR_LOG_ERR("Failed to increment remote heartbeat");
-            return ret;
-        }
+  for (int i = 0; i < npeers; ++i)
+    if (i != host_id && (ret = rdma_inc(&n->r, &tx, i))) {
+      SMR_LOG_ERR("Failed to increment remote heartbeat");
+      return ret;
+    }
 
-    return 0;  // consensus_wait(n, SMR_BG, npeers - 1);
+  return 0; // consensus_wait(n, SMR_BG, npeers - 1);
 }
 
 /* Leader election background thread.
@@ -41,34 +41,34 @@ uint64_t __smr__hb_tick(struct consensus *n) {
  * switching if the leader goes down.
  */
 void *__smr__leader_election_thread(void *p) {
-    struct consensus *n = (struct consensus *)p;
-    struct leader_election *l = &n->le;
-    uint64_t ret, *hb_remote = BG_HB(n);
-    uint16_t host_id = n->c->host_id;
-    uint16_t npeers = n->c->n;
+  struct consensus *n = (struct consensus *)p;
+  struct leader_election *l = &n->le;
+  uint64_t ret, *hb_remote = BG_HB(n);
+  uint16_t host_id = n->c->host_id;
+  uint16_t npeers = n->c->n;
 
-    SMR_LOG("Leader election thread starting\n");
-    l->leader = 0;
+  SMR_LOG("Leader election thread starting\n");
+  l->leader = 0;
 
-    while (1) {
-        for (int i = 0; i < npeers; ++i) l->hb[i] = hb_remote[i];
-        if ((ret = __smr__hb_tick(n))) goto err;
-        for (int i = 0; i < npeers; ++i)
-            if (i != host_id) {
-                l->scores[i] +=
-                    (l->hb[i] != hb_remote[i]) - (l->hb[i] == hb_remote[i]);
-                /* Scores are capped by a maximum and minimum */
-                if (l->scores[i] < SMR_HB_SCORE_MIN)
-                    l->scores[i] = SMR_HB_SCORE_MIN;
-                if (l->scores[i] > SMR_HB_SCORE_MAX)
-                    l->scores[i] = SMR_HB_SCORE_MAX;
-                SMR_LOG("Heartbeat %hu: %lu %ld\n", i, hb_remote[i],
-                        l->scores[i]);
-            }
-        sleep(HB_TICK_FREQ);
-    }
+  while (1) {
+    for (int i = 0; i < npeers; ++i)
+      l->hb[i] = hb_remote[i];
+    if ((ret = __smr__hb_tick(n)))
+      goto err;
+    for (int i = 0; i < npeers; ++i)
+      if (i != host_id) {
+        l->scores[i] += (l->hb[i] != hb_remote[i]) - (l->hb[i] == hb_remote[i]);
+        /* Scores are capped by a maximum and minimum */
+        if (l->scores[i] < SMR_HB_SCORE_MIN)
+          l->scores[i] = SMR_HB_SCORE_MIN;
+        if (l->scores[i] > SMR_HB_SCORE_MAX)
+          l->scores[i] = SMR_HB_SCORE_MAX;
+        SMR_LOG("Heartbeat %hu: %lu %ld\n", i, hb_remote[i], l->scores[i]);
+      }
+    sleep(HB_TICK_FREQ);
+  }
 
 err:
-    SMR_LOG("Leader election thread exiting with status %d\n", errno);
-    pthread_exit((void *)ret);
+  SMR_LOG("Leader election thread exiting with status %d\n", errno);
+  pthread_exit((void *)ret);
 }
