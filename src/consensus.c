@@ -82,25 +82,7 @@ int consensus_init(struct config *c, struct consensus *n, size_t log_size) {
         return ret;
       }
 
-  return 0;
-}
-
-int consensus_connect(struct consensus *n) {
-  int ret;
-
-  /* RDMA handshake initates peer discovery */
-  if ((ret = rdma_handshake(&n->r))) {
-    SMR_LOG_ERR("RDMA handshake failed");
-    return ret;
-  }
-
-  /* Launch leader election thread in the background */
-  if (pthread_create(&n->le.tid, NULL, __smr__leader_election_thread,
-                     (void *)n)) {
-    perror("pthread_create");
-    return -errno;
-  }
-
+  n->fast_path_enabled = SMR_FAST_PATH_ENABLED;
   return 0;
 }
 
@@ -155,7 +137,9 @@ int __smr__consensus_read_slot_buffer(struct consensus *n, uint16_t id) {
   return rdma_read(&n->r, &t, id);
 }
 
-/* Update a remote peer's slot from the local scratchpad buffer */
+/* Update a remote peer's slot from the local scratchpad buffer
+ * This function makes 3 remote writes.
+ * */
 int __smr__consensus_update_slot(struct consensus *n, size_t index,
                                  uint16_t id) {
   int ret;
@@ -173,29 +157,30 @@ int __smr__consensus_update_slot(struct consensus *n, size_t index,
   s->propno = my_s->propno;
   s->buf = h->buf;
 
+  // WRITE 1: payload for this slot
   struct mem_tx t = {.local_plane = SMR_SCRATCHPAD,
                      .local_addr = (uint64_t)s,
                      .remote_plane = SMR_REP,
                      .remote_offset = offset,
                      .remote_addr = 0,
                      .len = sizeof(struct slot)};
-
   if ((ret = rdma_write(&n->r, &t, id))) {
     SMR_LOG_ERR("Remote slot write failed");
     return ret;
   }
 
+  // WRITE 2: slot pointers for this slot
   t.local_plane = SMR_REP;
   t.local_addr = (uint64_t)n->log->slots[index].buf;
   t.remote_addr = (uint64_t)h->buf;
   t.remote_offset = 0;
   t.len = s->len;
-
   if ((ret = rdma_write(&n->r, &t, id))) {
     SMR_LOG_ERR("Remote log  write failed");
     return ret;
   }
 
+  // WRITE 3: log header update
   h->buf += s->len;
   h->size += s->len;
   if ((ret = __smr__consensus_write_log_header(n, id))) {
@@ -229,12 +214,39 @@ int __smr__log_insert(struct log *l, size_t idx, uint32_t propno, uint8_t *buf,
  * https://www.usenix.org/system/files/osdi20-aguilera.pdf
  */
 int consensus_propose(struct consensus *n, uint8_t *buf, size_t len) {
-  int ret;
-  uint8_t done = 0;
   size_t npeers = n->c->n;
   uint16_t host_id = n->c->host_id;
+  /* Fast path: If enabled, try to directly write the value. */
+  if (n->fast_path_enabled)
+    if (__smr__log_insert(n->log, n->log->h.fuo, ++n->log->h.minprop, buf,
+                          len) == 0) {
+      int write_count = 0;
+      for (uint16_t i = 0; i < npeers; ++i) {
+        if (i != host_id) {
+          if (__smr__consensus_update_slot(n, n->log->h.fuo, i) == 0) {
+            write_count += 3; // 3 writes: slot data + log data + log header
+          } else {
+            /* A write failed, abort fast path for this proposal */
+            n->fast_path_enabled = false;
+            SMR_LOG_ERR("Fast path write failed, falling back to slow path.");
+            goto slow_path;
+          }
+        }
+      }
+      /* Wait for a majority of writes to complete */
+      if (consensus_wait(n, SMR_REP, write_count) == 0) {
+        n->log->h.fuo++;
+        return 0;
+      } else {
+        n->fast_path_enabled = false;
+        SMR_LOG_ERR("Fast path wait failed, falling back to slow path.");
+      }
+    }
+slow_path:
   struct log_header *hdrs = SP_HDRS(n);
   struct slot *slots = SP_SLOTS(n);
+  bool done = 0;
+  int ret;
 
   while (!done) {
     /* Read remote minProposals */
@@ -339,6 +351,7 @@ int consensus_propose(struct consensus *n, uint8_t *buf, size_t len) {
 
     ++n->log->h.fuo;
   }
+
   return 0;
 }
 
@@ -352,4 +365,36 @@ void consensus_destroy(struct consensus *n) {
   free(n->buf);
   free(n->le.hb);
   free(n->le.scores);
+}
+
+int consensus_connect(struct consensus *n) {
+  int ret;
+  size_t npeers = n->c->n;
+  uint16_t host_id = n->c->host_id;
+
+  /* RDMA handshake initates peer discovery */
+  if ((ret = rdma_handshake(&n->r))) {
+    SMR_LOG_ERR("RDMA handshake failed");
+    return ret;
+  }
+
+  /* Launch leader election thread in the background */
+  if (pthread_create(&n->le.tid, NULL, __smr__leader_election_thread,
+                     (void *)n)) {
+    perror("pthread_create");
+    return -errno;
+  }
+
+  /* Prefetch remote headers */
+  if (host_id == 0) {
+    for (uint16_t i = 0; i < npeers; ++i)
+      if (i != host_id)
+        if (__smr__consensus_read_log_header(n, i)) {
+          SMR_LOG_ERR("Failed to read remote proposal");
+          return -errno;
+        }
+    return consensus_wait(n, SMR_REP, npeers - 1);
+  }
+
+  return 0;
 }

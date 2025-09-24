@@ -8,6 +8,7 @@
 #include <sys/random.h>
 #include <unistd.h>
 
+#include "bench.h"
 #include "timer.h"
 
 #define PORT (8000)
@@ -32,12 +33,15 @@ void *client_thread(void *p) {
   assert(!consensus_init(c, &n, SMR_LOG_SIZE));
   assert(!consensus_connect(&n));
 
-  if (n.c->host_id == 0)
+  if (n.c->host_id == 0) {
+    double timing_vals[SMR_MAX_SLOTS];
     for (int i = 0; i < SMR_MAX_SLOTS; ++i) {
       uint8_t *offset = buf + i * SMR_MAX_BUF;
-      TIME_BLOCK_US(assert(!consensus_propose(&n, offset, SMR_MAX_BUF)););
+      TIME_BLOCK_US(assert(!consensus_propose(&n, offset, SMR_MAX_BUF));
+                    , timing_vals[i]);
     }
-  else
+    bench_report(timing_vals, SMR_MAX_SLOTS);
+  } else
     sleep(5);
 
   struct log_header *h = &n.log->h;

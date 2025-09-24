@@ -2,9 +2,22 @@
 #define RDMA_H
 
 #include <infiniband/verbs.h>
+#include <stdbool.h>
 
 #include "config.h"
 #include "net.h"
+
+/* Max Work requests */
+#define MAX_WR (1 << 3)
+
+/* Max scatter-gather entries */
+#define MAX_SGE (1 << 3)
+
+/* Default RDMA send work request ID */
+#define RDMA_SEND_WRID (1 << 0)
+
+/* Default RDMA recv work request ID */
+#define RDMA_RECV_WRID (1 << 1)
 
 /* RDMA context */
 struct rdma {
@@ -17,6 +30,11 @@ struct rdma {
   struct remote_attr *ra;             // remote attributes
   uint16_t lid;                       // local device id
   uint8_t gid[16];                    // global device id
+  uint32_t max_inline;                // max inline data (QP attribute)
+  struct numa {
+    bool enabled;     // Flag to enable numa awareness
+    int cpu_affinity; // CPU affinity of the NIC's NUMA node
+  } numa;
 };
 
 /* Memory transaction defines remote read/write operation. */
@@ -56,5 +74,8 @@ int rdma_wait(struct rdma *r, enum SMR_PLANE plane, size_t n);
 
 /* Release any resources held by the RDMA context*/
 void rdma_destroy(struct rdma *r);
+
+/* Set CPU affinity to NIC's NUMA node */
+int rdma_set_cpu_affinity(struct rdma *r);
 
 #endif /* RDMA_H */

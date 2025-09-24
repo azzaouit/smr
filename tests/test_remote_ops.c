@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NPEERS (2)
+#include "bench.h"
+#include "timer.h"
+
+#define NPEERS (3)
 #define PORT (8000)
 #define IB_PORT (1)
 #define GID_INDEX (1)
@@ -46,12 +49,15 @@ int main(int argc, char *argv[]) {
   assert(!consensus_connect(&n));
 
   if (n.c->host_id == 0) {
+    double timing_vals[SMR_MAX_SLOTS];
     assert((buf = calloc(1, SMR_MAX_BUF)));
     for (int i = 0; i < SMR_MAX_SLOTS; ++i) {
       for (int j = 0; j < SMR_MAX_BUF; ++j)
         buf[j] = rand() & 0xff;
-      assert(!consensus_propose(&n, buf, SMR_MAX_BUF));
+      TIME_BLOCK_US(assert(!consensus_propose(&n, buf, SMR_MAX_BUF));
+                    , timing_vals[i]);
     }
+    bench_report(timing_vals, SMR_MAX_SLOTS);
     srand(RANDOM_SEED);
     free(buf);
   } else

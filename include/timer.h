@@ -70,15 +70,13 @@ static inline uint64_t rdtsc() {
   } while (0)
 
 /* Microsecond precision (alternative for systems without nanosecond support) */
-#define TIME_BLOCK_US(block)                                                   \
+#define TIME_BLOCK_US(block, elapsed)                                          \
   do {                                                                         \
     struct timeval start, end;                                                 \
     gettimeofday(&start, NULL);                                                \
     block gettimeofday(&end, NULL);                                            \
-    uint64_t elapsed_us = (end.tv_sec - start.tv_sec) * 1000000ULL +           \
-                          (end.tv_usec - start.tv_usec);                       \
-    printf("Block executed in %llu microseconds (%.3f ms)\n",                  \
-           (unsigned long long)elapsed_us, elapsed_us / 1000.0);               \
+    (elapsed) = (end.tv_sec - start.tv_sec) * 1000000ULL +                     \
+                (end.tv_usec - start.tv_usec);                                 \
   } while (0)
 
 #endif /* TIMER_H */

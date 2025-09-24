@@ -8,7 +8,7 @@ SRC=$(wildcard src/*.c)
 OBJ=$(SRC:.c=.o)
 
 TEST_CFLAGS=-g -fno-omit-frame-pointer ${CFLAGS}
-TEST_LDFLAGS=-Wl,-rpath,$(shell pwd) $(LIB)
+TEST_LDFLAGS=-Wl,-rpath,$(shell pwd) $(LIB) -lm
 TESTS=$(patsubst %.c, %, $(wildcard tests/*.c))
 
 all: build tests

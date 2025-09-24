@@ -6,11 +6,17 @@
 
 #include "log.h"
 
+/* Fast path enabled */
+#define SMR_FAST_PATH_ENABLED (1)
+
+/* Pin to core on RDMA NIC NUMA node*/
+#define SMR_NUMA_AWARE (1)
+
 /* Max buffer size for each slot */
-#define SMR_MAX_BUF (1 << 6)
+#define SMR_MAX_BUF (1 << 5)
 
 /* Max number of log slots */
-#define SMR_MAX_SLOTS (1 << 10)
+#define SMR_MAX_SLOTS (1 << 13)
 
 /* Full log size */
 #define SMR_LOG_SIZE (SMR_MAX_BUF * SMR_MAX_SLOTS)

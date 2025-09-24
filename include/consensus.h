@@ -2,13 +2,14 @@
 #define CONSENSUS_H
 
 #include "rdma.h"
+#include <stdbool.h>
 
 /* Log slot description */
 struct slot {
   size_t len;      // nbytes stored in this slot
   uint8_t *buf;    // ptr to data in this slot
   uint32_t propno; // proposal number
-} __attribute__((packed));
+} __attribute__((packed, aligned(8)));
 
 /* Log header description */
 struct log_header {
@@ -17,14 +18,14 @@ struct log_header {
   size_t capacity;  // log capacity
   uint32_t minprop; // minimum proposal number
   uint8_t *buf;     // log data of size (capacity * sizeof(slot))
-} __attribute__((packed));
+} __attribute__((packed, aligned(64)));
 
 /* Full log replicated across peers */
 struct log {
   struct log_header h;              // log header
   struct slot slots[SMR_MAX_SLOTS]; // slots
   uint8_t data[];                   // log data
-} __attribute__((packed));
+} __attribute__((packed, aligned(64)));
 
 /* Leader election handle */
 struct leader_election {
@@ -42,6 +43,7 @@ struct consensus {
   uint8_t *bg;               // Background metadata
   uint8_t *buf;              // log buffer
   struct leader_election le; // leader election context
+  bool fast_path_enabled;    // flag to enable fast path optimization
 };
 
 /* Initialize consensus */

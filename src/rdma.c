@@ -1,19 +1,9 @@
+#define _GNU_SOURCE
 #include "rdma.h"
 
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-/* Max Work requests */
-#define MAX_WR (1 << 3)
-
-/* Max scatter-gather entries */
-#define MAX_SGE (1 << 3)
-
-/* Default RDMA send work request ID */
-#define RDMA_SEND_WRID (1 << 0)
-
-/* Default RDMA recv work request ID */
-#define RDMA_RECV_WRID (1 << 1)
 
 int rdma_init(struct config *c, struct rdma *r) {
   int i;
@@ -77,7 +67,10 @@ int rdma_init(struct config *c, struct rdma *r) {
     perror("calloc");
     goto errra;
   }
-  return 0;
+
+  r->max_inline = 0;
+  r->numa.enabled = SMR_NUMA_AWARE;
+  return rdma_set_cpu_affinity(r);
 
 errra:
   free(r->qp);
@@ -147,6 +140,10 @@ int rdma_add_qp(struct rdma *r, enum SMR_PLANE plane, int id) {
     return -errno;
   }
 
+  // Determine max inline data on this QP
+  if (!ibv_query_qp(r->qp[index], &attr, IBV_QP_CAP, &init_attr))
+    r->max_inline = init_attr.cap.max_inline_data;
+
   return 0;
 }
 
@@ -170,8 +167,10 @@ int __smr__rdma_remote_op(struct rdma *r, struct mem_tx *t, uint16_t id,
   wr.wr_id = RDMA_SEND_WRID;
   wr.sg_list = &list;
   wr.opcode = o;
-  wr.send_flags = IBV_SEND_SIGNALED;
   wr.num_sge = 1;
+  wr.send_flags = IBV_SEND_SIGNALED;
+  if (o == IBV_WR_RDMA_WRITE && t->len < r->max_inline)
+    wr.send_flags |= IBV_SEND_INLINE;
 
   ra = (t->remote_addr ? t->remote_addr : a->addr) + t->remote_offset;
   if (o == IBV_WR_ATOMIC_FETCH_AND_ADD) {
@@ -201,26 +200,43 @@ inline int rdma_inc(struct rdma *r, struct mem_tx *t, uint16_t id) {
   return __smr__rdma_remote_op(r, t, id, IBV_WR_ATOMIC_FETCH_AND_ADD);
 }
 
-// block for n work request completions on a plane
+// wait for n work request completions on a plane
 int rdma_wait(struct rdma *r, enum SMR_PLANE plane, size_t n) {
-  int ret = 0;
   size_t count = 0;
-  struct ibv_wc wc[n];
+  struct ibv_wc wc[64];
+  int polls_without_progress = 0;
+  const int max_empty_polls = 1000000; // Prevent infinite busy loop
+
   while (count < n) {
-    do {
-      if ((ret = ibv_poll_cq(r->cq[plane], n - count, wc + count)) < 0) {
-        SMR_LOG_ERR("ibv_poll_cq failed");
-        return errno;
+    int ncheck = (n - count > 64) ? 64 : (n - count);
+    int ret = ibv_poll_cq(r->cq[plane], ncheck, wc);
+    if (ret > 0) {
+      /* Check completions for errors */
+      for (int i = 0; i < ret; i++) {
+        if (wc[i].status != IBV_WC_SUCCESS) {
+          fprintf(stderr, "Work completion error: %s\n",
+                  ibv_wc_status_str(wc[i].status));
+          return wc[i].status;
+        }
       }
-    } while (!ret);
-    count += ret;
-  }
-  for (size_t i = 0; i < n; ++i)
-    if (wc[i].status != IBV_WC_SUCCESS) {
-      fprintf(stderr, "%d %s\n", wc[i].status, ibv_wc_status_str(wc[i].status));
-      SMR_LOG_ERR("WC returned with error status");
-      return wc[i].status;
+      count += ret;
+      polls_without_progress = 0;
+    } else if (ret < 0) {
+      SMR_LOG_ERR("ibv_poll_cq failed");
+      return errno;
+    } else {
+      /* No completions ready - continue busy polling */
+      polls_without_progress++;
+      if (polls_without_progress > max_empty_polls) {
+        SMR_LOG_ERR("Busy poll timeout - no completions after %d polls",
+                    max_empty_polls);
+        return -ETIMEDOUT;
+      }
+      // spin loop hint
+      __asm__ __volatile__("pause" ::: "memory");
     }
+  }
+
   return 0;
 }
 
@@ -256,4 +272,35 @@ void rdma_destroy(struct rdma *r) {
   free(r->ra);
   r->ra = NULL;
   r->c = NULL;
+}
+
+int rdma_set_cpu_affinity(struct rdma *r) {
+  if (!r->numa.enabled)
+    return 0;
+
+  // Get device NUMA node
+  char path[256];
+  snprintf(path, sizeof(path), "/sys/class/infiniband/%s/device/numa_node",
+           ibv_get_device_name(r->ctx->device));
+
+  FILE *f = fopen(path, "r");
+  if (f != NULL) {
+    if (fscanf(f, "%d", &r->numa.cpu_affinity) != 1) {
+      // Fallback to CPU 0 if we can't determine NUMA node
+      r->numa.cpu_affinity = 0;
+    }
+    fclose(f);
+  }
+
+  // Set thread affinity
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(r->numa.cpu_affinity, &cpuset);
+
+  int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+  if (!ret)
+    SMR_LOG("RDMA: Set CPU affinity to core %d (NUMA node of NIC)\n",
+            r->numa.cpu_affinity);
+
+  return ret;
 }
