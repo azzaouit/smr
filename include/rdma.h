@@ -31,10 +31,9 @@ struct rdma {
   uint16_t lid;                       // local device id
   uint8_t gid[16];                    // global device id
   uint32_t max_inline;                // max inline data (QP attribute)
-  struct numa {
-    bool enabled;     // Flag to enable numa awareness
-    int cpu_affinity; // CPU affinity of the NIC's NUMA node
-  } numa;
+#if SMR_NUMA_AWARE
+  int cpu_affinity; // CPU affinity of the NIC's NUMA node
+#endif
 };
 
 /* Memory transaction defines remote read/write operation. */
@@ -45,7 +44,11 @@ struct mem_tx {
   uint64_t remote_addr;        // REMOTE addr
   off_t remote_offset;         // REMOTE offset
                                // full addr = remote_addr + remote_offset
-  size_t len;                  // size of payload
+#if SMR_RDMA_CAS_ENABLED
+  uint64_t compare_addr; // Address of compare values for CAS
+  uint64_t swap_addr;    // Address of swap values for CAS
+#endif
+  size_t len; // size of payload
 };
 
 /* Initialize an RDMA context */
@@ -72,10 +75,17 @@ int rdma_inc(struct rdma *r, struct mem_tx *t, uint16_t id);
 /* Wait for n work completions */
 int rdma_wait(struct rdma *r, enum SMR_PLANE plane, size_t n);
 
-/* Release any resources held by the RDMA context*/
-void rdma_destroy(struct rdma *r);
+#if SMR_RDMA_CAS_ENABLED
+/* Remote compare-and-swap operation */
+int rdma_cas(struct rdma *r, struct mem_tx *t, uint16_t id);
+#endif
 
+#if SMR_NUMA_AWARE
 /* Set CPU affinity to NIC's NUMA node */
 int rdma_set_cpu_affinity(struct rdma *r);
+#endif
+
+/* Release any resources held by the RDMA context*/
+void rdma_destroy(struct rdma *r);
 
 #endif /* RDMA_H */

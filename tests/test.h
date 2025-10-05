@@ -51,8 +51,7 @@ void *client_thread(void *p) {
     struct slot *s = n.log->slots + i;
     assert(s->len == SMR_MAX_BUF);
     assert(s->propno == i + 1);
-    uint8_t *offset = buf + i * SMR_MAX_BUF;
-    assert(!memcmp(offset, s->buf, SMR_MAX_BUF));
+    assert(!memcmp(buf + i * SMR_MAX_BUF, s->buf, SMR_MAX_BUF));
   }
 
   consensus_destroy(&n);

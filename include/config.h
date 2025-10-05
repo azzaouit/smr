@@ -12,11 +12,14 @@
 /* Pin to core on RDMA NIC NUMA node*/
 #define SMR_NUMA_AWARE (1)
 
+/* Use compare-and-swap operations for writes */
+#define SMR_RDMA_CAS_ENABLED (1)
+
 /* Max buffer size for each slot */
-#define SMR_MAX_BUF (1 << 5)
+#define SMR_MAX_BUF (1 << 6)
 
 /* Max number of log slots */
-#define SMR_MAX_SLOTS (1 << 13)
+#define SMR_MAX_SLOTS (1 << 10)
 
 /* Full log size */
 #define SMR_LOG_SIZE (SMR_MAX_BUF * SMR_MAX_SLOTS)
