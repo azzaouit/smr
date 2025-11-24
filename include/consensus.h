@@ -1,8 +1,9 @@
 #ifndef CONSENSUS_H
 #define CONSENSUS_H
 
-#include "rdma.h"
 #include <stdbool.h>
+
+#include "rdma.h"
 
 /* Log slot description */
 struct slot {
@@ -30,7 +31,6 @@ struct log {
 /* Leader election handle */
 struct leader_election {
   uint16_t leader; // current leader
-  uint64_t *hb;    // all heartbeats
   int64_t *scores; // all scores
   pthread_t tid;   // leader election thread handle
 };
@@ -41,9 +41,9 @@ struct consensus {
   struct rdma r;             // RDMA context
   struct log *log;           // Replication log
   uint8_t *bg;               // Background metadata
-  uint8_t *buf;              // log buffer
-  struct leader_election le; // leader election context
-  bool fast_path_enabled;    // flag to enable fast path optimization
+  uint8_t *scratch;          // Scratchpad buffer
+  struct leader_election le; // Leader election context
+  bool fast_path_enabled;    // Flag to enable fast path optimization
 };
 
 /* Initialize consensus */

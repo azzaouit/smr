@@ -2,9 +2,29 @@
 #define CONFIG_H
 
 #include <arpa/inet.h>
-#include <stdio.h>
 
-#include "log.h"
+#define DEBUG (1)
+
+#ifdef DEBUG
+#include <stdio.h>
+#define SMR_LOG(fmt, ...)                                                      \
+  do {                                                                         \
+    time_t _now = time(NULL);                                                  \
+    struct tm _tm;                                                             \
+    localtime_r(&_now, &_tm);                                                  \
+    char _buf[20];                                                             \
+    strftime(_buf, sizeof(_buf), "%Y-%m-%d %H:%M:%S", &_tm);                   \
+    fprintf(stderr, "[%s][%s:%d] " fmt "\n", _buf, __FILE__, __LINE__,         \
+            ##__VA_ARGS__);                                                    \
+  } while (0)
+#else
+#define SMR_LOG(MSG, ...)                                                      \
+  do {                                                                         \
+  } while (0)
+#endif
+
+/* Initial leader node */
+#define INITIAL_LEADER (0)
 
 /* Fast path enabled */
 #define SMR_FAST_PATH_ENABLED (1)
@@ -16,13 +36,14 @@
 #define SMR_MAX_BUF (1 << 5)
 
 /* Max number of log slots */
-#define SMR_MAX_SLOTS (1 << 13)
+#define SMR_MAX_SLOTS (1 << 10)
 
 /* Full log size */
 #define SMR_LOG_SIZE (SMR_MAX_BUF * SMR_MAX_SLOTS)
 
-/* Failure threshold. Leader switch happens if the leader's score drops below
- * this value. */
+/* Failure threshold. Leader switch
+ * happens if the leader's
+ * score drops below this value. */
 #define SMR_HB_FAIL_THRESH (2)
 
 /* Minimum score value */

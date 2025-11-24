@@ -37,8 +37,10 @@ void *client_thread(void *p) {
     double timing_vals[SMR_MAX_SLOTS];
     for (int i = 0; i < SMR_MAX_SLOTS; ++i) {
       uint8_t *offset = buf + i * SMR_MAX_BUF;
-      TIME_BLOCK_US(assert(!consensus_propose(&n, offset, SMR_MAX_BUF));
+      int ret;
+      TIME_BLOCK_US(ret = consensus_propose(&n, offset, SMR_MAX_BUF);
                     , timing_vals[i]);
+      assert(!ret);
     }
     bench_report(timing_vals, SMR_MAX_SLOTS);
   } else

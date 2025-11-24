@@ -1,7 +1,5 @@
 # libsmr
 
-State Machine Replication over RDMA
-
 # HW Requirements
 
 RDMA NIC, OFED drivers
