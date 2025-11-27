@@ -27,7 +27,7 @@ struct rdma_xchg_args {
 // Validate peer exists in the network config
 int __smr__valid_peer(struct config *c, uint32_t ip, int id) {
     for (size_t i = 0; i < c->n; ++i)
-        if (ip == c->p[i].ip.s_addr && c->p[i].id == id) return 1;
+        if (ip == c->p[i].v && c->p[i].id == id) return 1;
     return 0;
 }
 
@@ -109,7 +109,7 @@ void *__smr__server_thread(void *ptr) {
 
     struct config *c = r->c;
     uint16_t host_port = c->p[c->host_id].tcp_port;
-    uint32_t host_ip = c->p[c->host_id].ip.s_addr;
+    uint32_t host_ip = c->p[c->host_id].v;
 
     if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket:");
@@ -120,7 +120,7 @@ void *__smr__server_thread(void *ptr) {
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = host_ip;
+    server.sin_addr.s_addr = htonl(host_ip);
     server.sin_port = htons(host_port);
 
     if (bind(serverfd, (struct sockaddr *)&server, sizeof(server)) < 0) {
@@ -210,7 +210,7 @@ void *__smr__client_thread(void *ptr) {
     struct rdma *r = ((struct rdma_xchg_args *)ptr)->r;
     int id = ((struct rdma_xchg_args *)ptr)->id;
     int *ret = &((struct rdma_xchg_args *)ptr)->ret;
-    struct peer_config *p = r->c->p + id;
+    struct node_config *p = r->c->p + id;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket");
@@ -220,7 +220,7 @@ void *__smr__client_thread(void *ptr) {
 
     memset(&serveraddr, 0, sizeof serveraddr);
     serveraddr.sin_family = AF_INET;
-    serveraddr.sin_addr.s_addr = p->ip.s_addr;
+    serveraddr.sin_addr.s_addr = htonl(p->v);
     serveraddr.sin_port = htons(p->tcp_port);
 
     for (i = 0; i < MAX_RETRIES; ++i) {

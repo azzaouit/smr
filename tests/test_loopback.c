@@ -1,4 +1,6 @@
 // test multiple hosts using the same RDMA device (loopback)
+#include <pthread.h>
+
 #include "test.h"
 
 #define NPEERS (4)
@@ -6,13 +8,11 @@
 int main() {
     pthread_t tids[NPEERS];
     struct config c[NPEERS];
-    struct peer_config p[NPEERS];
-    union ipv4 host = {.ip = {1, 0, 0, 127}};
-
-    init_buf();
+    struct node_config p[NPEERS];
+    char host[] = {1, 0, 0, 127};
 
     for (int i = 0; i < NPEERS; ++i) {
-        p[i].ip.s_addr = (uint32_t)htonl(host.v);
+        memcpy(p[i].ip, host, sizeof(host));
         p[i].id = i;
         p[i].tcp_port = PORT + i;
         p[i].ib_port = IB_PORT;
@@ -29,5 +29,6 @@ int main() {
     for (int i = 0; i < NPEERS; ++i) pthread_join(tids[i], NULL);
 
     free(buf);
+
     return 0;
 }

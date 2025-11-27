@@ -44,6 +44,7 @@ struct consensus {
   uint8_t *scratch;          // Scratchpad buffer
   struct leader_election le; // Leader election context
   bool fast_path_enabled;    // Flag to enable fast path optimization
+  pthread_mutex_t lock;      // Lock for propose call
 };
 
 /* Initialize consensus */

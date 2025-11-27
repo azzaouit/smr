@@ -1,19 +1,20 @@
 // test multiple peers on the same host
 #include <arpa/inet.h>
 #include <assert.h>
-#include <consensus.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 #include <unistd.h>
 
 #include "bench.h"
+#include "consensus.h"
 #include "timer.h"
 
 #define PORT (8000)
 #define IB_PORT (1)
 #define GID_INDEX (0)
+
+#define HEADER_SIZE(n)
 
 union ipv4 {
   char ip[4];
@@ -22,14 +23,15 @@ union ipv4 {
 
 static uint8_t *buf;
 
-static inline void init_buf() {
-  assert((buf = calloc(1, SMR_LOG_SIZE)));
-  assert(getrandom(buf, SMR_LOG_SIZE, GRND_RANDOM) == SMR_LOG_SIZE);
-}
-
 void *client_thread(void *p) {
   struct consensus n;
   struct config *c = (struct config *)p;
+
+  if (!buf) {
+    assert((buf = calloc(1, SMR_LOG_SIZE)));
+    assert(getrandom(buf, SMR_LOG_SIZE, GRND_RANDOM) == SMR_LOG_SIZE);
+  }
+
   assert(!consensus_init(c, &n, SMR_LOG_SIZE));
   assert(!consensus_connect(&n));
 
@@ -44,7 +46,8 @@ void *client_thread(void *p) {
     }
     bench_report(timing_vals, SMR_MAX_SLOTS);
   } else
-    sleep(5);
+    while (((volatile struct log_header *)&n.log->h)->size != SMR_LOG_SIZE)
+      usleep(10);
 
   struct log_header *h = &n.log->h;
   assert(h->size == SMR_LOG_SIZE);
@@ -58,5 +61,6 @@ void *client_thread(void *p) {
   }
 
   consensus_destroy(&n);
-  pthread_exit(NULL);
+
+  return NULL;
 }

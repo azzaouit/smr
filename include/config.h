@@ -3,7 +3,7 @@
 
 #include <arpa/inet.h>
 
-#define DEBUG (1)
+#define DEBUG (0)
 
 #ifdef DEBUG
 #include <stdio.h>
@@ -33,10 +33,10 @@
 #define SMR_NUMA_AWARE (1)
 
 /* Max buffer size for each slot */
-#define SMR_MAX_BUF (1 << 5)
+#define SMR_MAX_BUF (32)
 
 /* Max number of log slots */
-#define SMR_MAX_SLOTS (1 << 10)
+#define SMR_MAX_SLOTS (1000000)
 
 /* Full log size */
 #define SMR_LOG_SIZE (SMR_MAX_BUF * SMR_MAX_SLOTS)
@@ -60,24 +60,27 @@ enum SMR_PLANE {
   SMR_SCRATCHPAD, // scratchpad
 };
 
-/* Peer entry */
-struct peer_config {
-  struct in_addr ip;  // peer ip addr
+/* Node entry */
+struct node_config {
+  union {
+    char ip[4];
+    uint32_t v;
+  }; // node ip addr
   uint16_t id;        // peer rank
   uint16_t tcp_port;  // peer tcp port
   uint16_t ib_port;   // peer ib device port
   uint16_t gid_index; // peer ib device global id
 };
 
-/* Peer configuration used for network discovery
+/* Node configuration used for network discovery
  * during the initial bootstrapping phase.
- * Every peer should have a copy of this struct.
+ * Every node should have a copy of this struct.
  * */
 struct config {
   size_t n;              // number of peers
   uint16_t host_id;      // this peer's rank
   uint8_t rdma_device;   // index into rdma device list
-  struct peer_config *p; // all peers
+  struct node_config *p; // all nodes
 };
 
 #endif /* CONFIG_H */

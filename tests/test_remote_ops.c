@@ -6,9 +6,9 @@
 #include <unistd.h>
 
 #include "bench.h"
+#include "net_map.h"
 #include "timer.h"
 
-#define NPEERS (3)
 #define PORT (8000)
 #define IB_PORT (1)
 #define GID_INDEX (1)
@@ -22,8 +22,6 @@ union ipv4 {
 int main(int argc, char *argv[]) {
     uint8_t *buf;
     struct consensus n;
-    struct peer_config p[NPEERS];
-    union ipv4 host = {.ip = {0, 1, 10, 10}};
 
     if (argc != 2) {
         fprintf(stderr, "Usage %s <host id>\n", argv[0]);
@@ -32,17 +30,10 @@ int main(int argc, char *argv[]) {
 
     srand(RANDOM_SEED);
 
-    for (int i = 0; i < NPEERS; ++i) {
-        host.ip[0] = i + 1;
-        p[i].ip.s_addr = (uint32_t)htonl(host.v);
-        p[i].id = i;
-        p[i].tcp_port = PORT;
-        p[i].ib_port = IB_PORT;
-        p[i].gid_index = GID_INDEX;
-    }
-
-    struct config c = {
-        .n = NPEERS, .host_id = atoi(argv[1]), .p = p, .rdma_device = 0};
+    struct config c = {.n = NPEERS,
+                       .host_id = atoi(argv[1]),
+                       .p = (struct node_config *)net_cfg,
+                       .rdma_device = 0};
 
     assert(!consensus_init(&c, &n, SMR_LOG_SIZE));
     assert(!consensus_connect(&n));
@@ -59,7 +50,8 @@ int main(int argc, char *argv[]) {
         srand(RANDOM_SEED);
         free(buf);
     } else
-        sleep(10);
+        while (((volatile struct log_header *)&n.log->h)->size != SMR_LOG_SIZE)
+            usleep(10);
 
     struct log_header *h = &n.log->h;
     assert(h->size == SMR_LOG_SIZE);

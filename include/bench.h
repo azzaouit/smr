@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Holds the calculated statistics for a benchmark run. */
 struct __stats {
@@ -67,6 +68,13 @@ void __compute_stats(struct __stats *s, double *data, size_t len) {
   s->p999 = sorted_data[(long)(len * 0.999)];
 
   free(sorted_data);
+}
+
+void bench_save(const char *file_path, double *data, size_t len) {
+  FILE *fp = fopen(file_path, "w");
+  for (size_t i = 0; i < len; ++i)
+    fprintf(fp, "%.2f\n", data[i]);
+  fclose(fp);
 }
 
 void bench_report(double *data, size_t len) {

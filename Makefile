@@ -6,12 +6,14 @@ PREFIX=/usr/local
 
 SRC=$(wildcard src/*.c)
 OBJ=$(SRC:.c=.o)
-
+BENCH=$(patsubst %.c, %, $(wildcard bench/*.c))
 TEST_CFLAGS=-g -fno-omit-frame-pointer ${CFLAGS}
 TEST_LDFLAGS=-Wl,-rpath,$(shell pwd) $(LIB) -lm
 TESTS=$(patsubst %.c, %, $(wildcard tests/*.c))
 
-all: build tests
+all: build $(TESTS) $(BENCH)
+
+bench: build $(BENCH)
 
 build: $(OBJ)
 	$(CC) -o $(LIB) $(OBJ) $(LDFLAGS)
@@ -20,6 +22,9 @@ tests: build $(TESTS)
 
 $(TESTS): %: %.c
 	$(CC) $< $(TEST_CFLAGS) -o $@ $(TEST_LDFLAGS)
+
+$(BENCH): %: %.c
+	$(CC) $< $(CFLAGS) -o $@ $(TEST_LDFLAGS)
 
 src/%.o: src/%.c
 	$(CC) -c $< -o $@ $(CFLAGS)
@@ -33,7 +38,7 @@ uninstall:
 	rm -rf $(PREFIX)/include/smr
 
 clean:
-	rm -rf $(OBJ) $(TESTS) $(LIB)
+	rm -rf $(OBJ) $(TESTS) $(BENCH) $(LIB)
 
 format:
 	find . -type f -name "*.c" -o -name "*.h" -exec clang-format -style=llvm -i {} \;

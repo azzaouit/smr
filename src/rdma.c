@@ -70,7 +70,9 @@ int rdma_init(struct config *c, struct rdma *r) {
     r->max_inline = 0;
     r->numa.enabled = SMR_NUMA_AWARE;
     r->numa.cpu_affinity = 0;
-    return rdma_set_cpu_affinity(r);
+    if (rdma_set_cpu_affinity(r)) SMR_LOG("Failed to set CPU affinity.");
+
+    return 0;
 
 errra:
     free(r->qp);
@@ -283,12 +285,18 @@ int rdma_set_cpu_affinity(struct rdma *r) {
              ibv_get_device_name(r->ctx->device));
 
     FILE *fp = fopen(path, "r");
-    if (fp != NULL) {
-        fscanf(fp, "%d", &r->numa.cpu_affinity);
-        fclose(fp);
+    if (!fp) {
+        SMR_LOG("Failed to open file %s\n", path);
+        return errno;
     }
 
-    // Set thread affinity
+    if (fscanf(fp, "%d", &r->numa.cpu_affinity) != 1) {
+        SMR_LOG("Failed to parse path %s\n", path);
+        fclose(fp);
+        return errno;
+    }
+    fclose(fp);
+
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(r->numa.cpu_affinity, &cpuset);

@@ -25,6 +25,7 @@ extern void *__smr__leader_election_thread(void *);
 int consensus_init(struct config *c, struct consensus *n, size_t log_size) {
     int ret;
     size_t npeers = c->n;
+    pthread_mutex_init(&n->lock, 0);
 
     // Allocate local log
     size_t ls = sizeof(struct log) + log_size;
@@ -206,8 +207,11 @@ int __smr__log_insert(struct log *l, size_t idx, uint32_t propno, uint8_t *buf,
  * https://www.usenix.org/system/files/osdi20-aguilera.pdf
  */
 int consensus_propose(struct consensus *n, uint8_t *buf, size_t len) {
+    int ret = 0;
     size_t npeers = n->c->n;
     uint16_t host_id = n->c->host_id;
+    pthread_mutex_lock(&n->lock);
+
     /* Fast path: If enabled, try to directly write the value. */
     if (n->fast_path_enabled && n->le.leader == host_id)
         if (!__smr__log_insert(n->log, n->log->h.fuo, ++n->log->h.minprop, buf,
@@ -231,7 +235,7 @@ int consensus_propose(struct consensus *n, uint8_t *buf, size_t len) {
             /* Wait for a majority of writes to complete */
             if (!consensus_wait(n, SMR_REP, write_count)) {
                 n->log->h.fuo++;
-                return 0;
+                goto exit;
             } else {
                 n->fast_path_enabled = false;
                 SMR_LOG("Fast path wait failed, falling back to slow path.");
@@ -241,7 +245,6 @@ slow_path:
     struct log_header *hdrs = SP_HDRS(n);
     struct slot *slots = SP_SLOTS(n);
     bool done = 0;
-    int ret;
 
     while (!done) {
         /* Read remote minProposals */
@@ -249,12 +252,12 @@ slow_path:
             if (i != host_id)
                 if (__smr__consensus_read_log_header(n, i)) {
                     SMR_LOG("Failed to read remote proposal");
-                    return -errno;
+                    goto exit;
                 }
 
         if ((ret = consensus_wait(n, SMR_REP, npeers - 1))) {
             SMR_LOG("Failed to receive remote proposal");
-            return ret;
+            goto exit;
         }
         uint32_t my_fuo = n->log->h.fuo;
 
@@ -275,11 +278,11 @@ slow_path:
                 h->minprop = minprop;
                 if ((ret = __smr__consensus_write_log_header(n, i))) {
                     SMR_LOG("Failed to write remote proposal");
-                    return ret;
+                    goto exit;
                 }
                 if ((ret = __smr__consensus_read_slot(n, my_fuo, i))) {
                     SMR_LOG("Failed to receive FUO slot");
-                    return ret;
+                    goto exit;
                 }
             }
         n->log->h.minprop = minprop;
@@ -303,43 +306,43 @@ slow_path:
             if (slot_id != host_id) {
                 if ((ret = __smr__consensus_read_slot_buffer(n, slot_id))) {
                     SMR_LOG("Failed to read slot buffer");
-                    return ret;
+                    goto exit;
                 }
                 if ((ret = consensus_wait(n, SMR_REP, 1))) {
                     SMR_LOG("Failed to receive slot buffer");
-                    return ret;
+                    goto exit;
                 }
                 if ((ret = __smr__log_insert(n->log, my_fuo, s->propno,
                                              SP_BUF(n), s->len))) {
                     SMR_LOG("Failed to insert slot");
-                    return ret;
+                    goto exit;
                 }
             }
             for (uint16_t i = 0; i < npeers; ++i)
                 if (i != host_id && i != slot_id)
                     if ((ret = __smr__consensus_update_slot(n, my_fuo, i))) {
                         SMR_LOG("Failed to update remote slot");
-                        return ret;
+                        goto exit;
                     }
             if ((ret = consensus_wait(n, SMR_REP, npeers - 2))) {
                 SMR_LOG("Failed to confirm remote slot update");
-                return ret;
+                goto exit;
             }
         } else {
             /* Otherwise, we adopt our own initial value. */
             if ((ret = __smr__log_insert(n->log, my_fuo, minprop, buf, len))) {
                 SMR_LOG("Failed to update local log");
-                return ret;
+                goto exit;
             }
             for (uint16_t i = 0; i < npeers; ++i)
                 if (i != host_id)
                     if ((ret = __smr__consensus_update_slot(n, my_fuo, i))) {
                         SMR_LOG("Failed to update remote log");
-                        return ret;
+                        goto exit;
                     }
             if ((ret = consensus_wait(n, SMR_REP, (npeers - 1) * 3))) {
                 SMR_LOG("Failed to confirm remote log update");
-                return ret;
+                goto exit;
             }
             done = 1;
         }
@@ -347,7 +350,9 @@ slow_path:
         ++n->log->h.fuo;
     }
 
-    return 0;
+exit:
+    pthread_mutex_unlock(&n->lock);
+    return ret;
 }
 
 /* Join leader election thread and free allocated memory */
@@ -359,6 +364,7 @@ void consensus_destroy(struct consensus *n) {
     free(n->bg);
     free(n->le.scores);
     free(n->scratch);
+    pthread_mutex_destroy(&n->lock);
 }
 
 int consensus_connect(struct consensus *n) {
